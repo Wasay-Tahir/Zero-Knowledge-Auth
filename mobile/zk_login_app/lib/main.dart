@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:io' show Platform;
 import 'api.dart';
+import 'poseidon.dart' as zk;
 
 void main() {
   runApp(const ZkLoginApp());
@@ -144,9 +145,9 @@ class _RegisterFormState extends State<RegisterForm> {
                   final salt = _salt.text.trim();
                   if (salt.isEmpty) return;
                   final password = _password.text.trim();
-                  final commitment = await api.commitment(password: password, salt: salt);
+                  final commitment = zk.commitmentDecimal(saltDec: salt, passwordDec: password);
                   _generatedCommitment = commitment;
-                  setStatus('Computed commitment');
+                  setStatus('Computed commitment locally');
                   setState(() {});
                 } catch (e) {
                   setStatus('Commitment error: $e');
@@ -160,8 +161,22 @@ class _RegisterFormState extends State<RegisterForm> {
           FilledButton(
             onPressed: () async {
               try {
-                final commitment = _generatedCommitment.isNotEmpty ? _generatedCommitment : await api.commitment(password: _password.text.trim(), salt: _salt.text.trim());
-                await api.register(username: _username.text.trim(), commitment: commitment, salt: _salt.text.trim().isEmpty ? null : _salt.text.trim());
+                final salt = _salt.text.trim();
+                final password = _password.text.trim();
+                final commitment = _generatedCommitment.isNotEmpty
+                    ? _generatedCommitment
+                    : (salt.isEmpty || password.isEmpty
+                        ? ''
+                        : zk.commitmentDecimal(saltDec: salt, passwordDec: password));
+                if (commitment.isEmpty) {
+                  setStatus('Provide salt and password to compute commitment');
+                  return;
+                }
+                await api.register(
+                  username: _username.text.trim(),
+                  commitment: commitment,
+                  salt: salt.isEmpty ? null : salt,
+                );
                 setStatus('Registered ${_username.text.trim()}');
               } catch (e) {
                 setStatus('Register error: $e');
